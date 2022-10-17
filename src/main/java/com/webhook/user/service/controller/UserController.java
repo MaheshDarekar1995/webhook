@@ -4,10 +4,13 @@ import com.svix.exceptions.ApiException;
 import com.svix.exceptions.WebhookVerificationException;
 import com.webhook.user.service.models.Events;
 import com.webhook.user.service.models.WebhookRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.Date;
 
@@ -15,25 +18,27 @@ import java.util.Date;
 @RequestMapping("/api/webhook")
 public class UserController {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
 
-    public UserController(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public UserController(WebClient webClient) {
+        this.webClient = webClient;
     }
 
     @PostMapping("/print")
-    public ResponseEntity<?> print(@RequestBody WebhookRequest request) throws ApiException, WebhookVerificationException {
+    public Mono<?> print(@RequestBody WebhookRequest request) throws ApiException, WebhookVerificationException {
         System.out.println("Webhook Request ========>" + request);
         request.setRow(java.util.UUID.randomUUID().toString());
         request.setDate(new Date().toString());
-        try {
-            ResponseEntity<Events> eventResponse=restTemplate.postForEntity("https://hooks.zapier.com/hooks/catch/13555221/b0m2dxc/", request, Events.class);
+            WebClient webClient = WebClient.create("https://hooks.zapier.com");
+
+            return webClient.post()
+                    .uri("/hooks/catch/13555221/b0m2dxc/")
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body(Mono.just(request), Events.class)
+                    .retrieve()
+                    .bodyToMono(Events.class);
         }
-        catch (Exception e){
-            return new ResponseEntity<WebhookRequest >(request, HttpStatus.SERVICE_UNAVAILABLE);
-        }
-        return new ResponseEntity<WebhookRequest >(request, HttpStatus.OK);
-    }
+
 
     @GetMapping("/apihealth") //http:localhost:8080/api/webhook/print
     public ResponseEntity<String> healthCheck() {
